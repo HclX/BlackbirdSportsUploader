@@ -72,6 +72,13 @@ To automatically scan for your device (configured in `.env`), download new `.fit
 python main.py sync
 ```
 
+You can control whether to wait for the device to appear (default is False):
+
+```bash
+# Wait for the device to appear
+python main.py sync --wait
+```
+
 ### 3. Manual Upload
 
 If you already have a `.fit` file locally and want to upload it:

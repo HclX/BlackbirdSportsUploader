@@ -5,7 +5,7 @@ import os
 from typing import List, Type, ClassVar, Tuple, Dict, Any, TypeVar
 from enum import Enum
 
-from bleak import BleakClient
+from bleak import BleakClient, BleakScanner
 from pure_protobuf.annotations import Field, ZigZagInt
 from pure_protobuf.message import BaseMessage
 from typing_extensions import Annotated
@@ -524,7 +524,23 @@ class BB16:
         return updated_records
 
 
-def scan_and_download() -> None:
+async def wait_for_device(address: str) -> None:
+    """
+    Waits for the device with the given address to be available.
+    """
+    logger.info(f"Waiting for device {address} to appear...")
+    print(f"Waiting for device {address} (Press Ctrl+C to abort)...")
+    
+    while True:
+        device = await BleakScanner.find_device_by_address(address, timeout=5.0)
+        if device:
+            logger.info(f"Device {address} found!")
+            print(f"Device {address} found!")
+            return
+        logger.debug(f"Device {address} not found yet, retrying...")
+
+
+def scan_and_download(wait: bool = False) -> None:
     """
     Scans for BB16 device and downloads new records using settings.BLE_ADDRESS.
     """
@@ -541,6 +557,9 @@ def scan_and_download() -> None:
         return
 
     async def _run():
+        if wait:
+            await wait_for_device(address)
+        
         logger.info(f"Connecting to device {address}...")
         try:
             async with BB16(address) as bb16:
@@ -551,5 +570,8 @@ def scan_and_download() -> None:
 
     try:
         asyncio.run(_run())
+    except KeyboardInterrupt:
+        logger.info("Sync aborted by user.")
+        print("\nAborted.")
     except Exception as e:
         logger.error(f"Failed to run async sync: {e}")

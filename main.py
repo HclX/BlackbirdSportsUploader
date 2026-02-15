@@ -200,6 +200,7 @@ def upload(
 def sync(
     device_type: str = typer.Option(settings.DEVICE_TYPE, help="Device type (e.g. android, ios)"),
     sn: str = typer.Option(settings.DEVICE_SN, help="Device Serial Number"),
+    wait: bool = typer.Option(False, help="Wait for device to appear if not found immediately."),
 ) -> None:
     """
     Automated sync: Scan, Download, and Upload new records.
@@ -222,7 +223,7 @@ def sync(
     # 1. Scan and Download
     logger.info("Starting device sync...")
     typer.echo("Starting device sync...")
-    scan_and_download()
+    scan_and_download(wait=wait)
 
     if not settings.DATA_DIR.exists():
         msg = "No data directory found."
