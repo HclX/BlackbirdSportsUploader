@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     LOG_FILE_NAME: str = "app.log"
     LOG_LEVEL_CONSOLE: str = "INFO"
     LOG_LEVEL_FILE: str = "DEBUG"
+    LOG_MAX_BYTES: int = 10 * 1024 * 1024  # 10 MB
+    LOG_BACKUP_COUNT: int = 5
 
     @property
     def log_file_path(self) -> Path:

@@ -3,10 +3,12 @@ import sys
 from .config import settings
 
 
+from logging.handlers import RotatingFileHandler
+
 def setup_logging(name: str) -> logging.Logger:
     """
     Setup logging configuration for the application.
-    Configures console and file handlers based on settings.
+    Configures console and rotating file handlers based on settings.
     """
     logger = logging.getLogger(name)
     
@@ -32,8 +34,13 @@ def setup_logging(name: str) -> logging.Logger:
         console_handler.setLevel(console_level)
         logger.addHandler(console_handler)
 
-        # File Handler
-        file_handler = logging.FileHandler(settings.log_file_path)
+        # File Handler (Rotating)
+        file_handler = RotatingFileHandler(
+            settings.log_file_path,
+            maxBytes=settings.LOG_MAX_BYTES,
+            backupCount=settings.LOG_BACKUP_COUNT,
+            encoding="utf-8"
+        )
         file_handler.setFormatter(formatter)
         file_handler.setLevel(file_level)
         logger.addHandler(file_handler)
