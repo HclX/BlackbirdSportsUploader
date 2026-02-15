@@ -1,0 +1,22 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Project specific
+.session.json
+*.fit
+*.zip
+*.xml
+*.log
+uploaded_records.json
+.env
+data/
+logs/
+
