@@ -51,6 +51,37 @@ uv sync
     -   `BLE_ADDRESS`: **Required** for the `sync` command. The MAC address of your BB16 device (e.g., `C3:26:30:11:22:33`).
     -   Other optional fields (`DEVICE_SN`, etc.) can usually be left as default unless you need to spoof a specific device identity.
 
+## Docker Usage
+
+Prior to running with Docker, ensure you have a `.env` file configured.
+
+### Prerequisites (Docker)
+
+-   Docker and Docker Compose installed.
+-   **Linux Host**: For BLE access to work, the container must run on a Linux host with generic Bluetooth drivers available. Windows/Mac Docker Desktop does not typically support host Bluetooth pass-through.
+
+### Running with Docker Compose
+
+1.  **Build and Run**:
+
+    ```bash
+    docker-compose up -d --build
+    ```
+
+    This will start the container (named `blackbird_sports_uploader`) in detached mode, running the `sync` command with `--wait` enabled. It will monitor for the device and sync automatically when available.
+
+2.  **View Logs**:
+
+    ```bash
+    docker-compose logs -f
+    ```
+
+3.  **Run Custom Commands**:
+
+    ```bash
+    docker-compose run --rm app python main.py info
+    ```
+
 ## Usage
 
 The script provides a Command Line Interface (CLI) via `main.py`.

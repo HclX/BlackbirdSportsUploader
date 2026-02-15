@@ -1,8 +1,8 @@
 services:
   app:
     build: .
-    image: bb16-script:latest
-    container_name: bb16-script
+    image: blackbird_sports_uploader:latest
+    container_name: blackbird_sports_uploader
     # Host network mode is crucial for BLE access on Linux
     network_mode: host
     privileged: true
