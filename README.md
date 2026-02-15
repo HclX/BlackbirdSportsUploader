@@ -56,3 +56,20 @@ docker-compose up -d
     -   `uploader.py`: API interaction.
 -   `tests/`: Unit tests.
 
+## Development
+
+### Running Tests
+
+To run the test suite, you need to install development dependencies:
+
+```bash
+uv sync --extra dev
+```
+
+Then run `pytest`:
+
+```bash
+uv run pytest
+```
+
+

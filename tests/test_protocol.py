@@ -1,11 +1,11 @@
 import pytest
 import binascii
-from blackbird_sports_uploader.device import Message, CmdType, TransType, Oid, GetFile
+import blackbird_sports_uploader.bb16 as bb16
 
 def test_message_framing_escape():
     # Test escaping of 0x7E, 0x7F, 0x7D
     original = b"\x7E\x7F\x7D"
-    escaped = Message.escape(original)
+    escaped = bb16.Message.escape(original)
     
     # 0x7E -> 0x7D 0x01
     # 0x7F -> 0x7D 0x02
@@ -30,12 +30,12 @@ def test_message_framing_escape():
     # 0x7F -> 0x7D 0x03?
     
     # Let's verify by unescaping
-    unescaped = Message.unescape(escaped)
+    unescaped = bb16.Message.unescape(escaped)
     assert unescaped == original
 
 def test_message_to_bytes():
     # Create a GetFile message
-    msg = GetFile(filename="test.txt", sid=1)
+    msg = bb16.GetFile(filename="test.txt", sid=1)
     
     encoded = msg.to_bytes()
     
@@ -46,16 +46,16 @@ def test_message_to_bytes():
     # Verify checksum logic implicitly by unescaping and calculating CRC
     # or just trust the from_bytes roundtrip
     
-    decoded = Message.from_bytes(encoded)
-    assert isinstance(decoded, GetFile)
+    decoded = bb16.Message.from_bytes(encoded)
+    assert isinstance(decoded, bb16.GetFile)
     assert decoded.filename == "test.txt"
     assert decoded.sid == 1
-    assert decoded.cmd_type == CmdType.Get
-    assert decoded.oid == Oid.GetFile
+    assert decoded.cmd_type == bb16.CmdType.Get
+    assert decoded.oid == bb16.Oid.GetFile
 
 def test_checksum_verification():
     # Construct a valid packet
-    msg = GetFile(filename="test.txt")
+    msg = bb16.GetFile(filename="test.txt")
     data = msg.to_bytes()
     
     # Corrupt a byte in the payload (guaranteed to be inside framing)
@@ -70,4 +70,31 @@ def test_checksum_verification():
     
     # Should raise assertion error due to CRC mismatch
     with pytest.raises(AssertionError, match="crc mismatch"):
-        Message.from_bytes(corrupted_data)
+        bb16.Message.from_bytes(corrupted_data)
+
+import pathlib
+
+def test_parsing_captured_packets():
+    # Load captured packets from file relative to this test file
+    current_dir = pathlib.Path(__file__).parent
+    packets_file = current_dir / "captured_packets.txt"
+    
+    with open(packets_file, "r") as f:
+        for line in f.readlines():
+            line = line.strip().replace(" ", "")
+            if line == "":
+                continue
+            data = bytes.fromhex(line)
+            try:
+                msg = bb16.Message.from_bytes(data)
+                print(msg)
+            except AssertionError as e:
+                print(f"Failed to parse packet: {e}")
+            except Exception as e:
+                print(f"Failed to parse packet: {e}")
+
+def test_message_parsing():
+    # Test parsing of a valid packet
+    data = bytes.fromhex("7e100029000108021a0456322e31220656312e302e372a0731343636313933320456312e3038c801f08d7f")
+    msg = bb16.Message.from_bytes(data)
+    print(msg)

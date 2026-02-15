@@ -10,7 +10,7 @@ from .fit_processor import FitProcessor
 from .uploader import compress_xml, upload_record
 from .config import settings
 from .logger import setup_logging
-from . import device
+from . import bb16
 
 # Setup logger for main module
 logger = setup_logging("main")
@@ -212,7 +212,7 @@ def sync(
         settings.DATA_DIR.mkdir(parents=True)
 
     while True:
-        if not device.download():
+        if not bb16.download():
             continue
 
         history = load_history()

@@ -1,11 +1,11 @@
 from pathlib import Path
 from typing import Optional
-from pydantic_settings import BaseSettings
-
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # Data directories
     DATA_DIR: Path = Path("data")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     # Filenames (relative to DATA_DIR)
     SESSION_FILENAME: str = ".session.json"
@@ -59,9 +59,7 @@ class Settings(BaseSettings):
         if not self.DATA_DIR.exists():
             self.DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+
 
 
 # Global settings instance

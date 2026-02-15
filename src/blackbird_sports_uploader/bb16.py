@@ -306,7 +306,7 @@ class GetDeviceInfoResponse(
 ):
     class _ProtoDef(BaseModel, BaseMessage):
         dev_type: Annotated[int, Field(1)]
-        file_trans_size: Annotated[int, Field(2)]
+        file_trans_size: Annotated[int, Field(2)] = FileTransSize.FILE_TRANS_SIZE_512.value
         hardware_version: Annotated[str, Field(3)]
         software_version: Annotated[str, Field(4)]
         serial_number: Annotated[str, Field(5)]
