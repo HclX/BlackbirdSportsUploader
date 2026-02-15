@@ -68,7 +68,7 @@ Prior to running with Docker, ensure you have a `.env` file configured.
     docker-compose up -d --build
     ```
 
-    This will start the container (named `blackbird_sports_uploader`) in detached mode, running the `sync` command with `--wait` enabled. It will monitor for the device and sync automatically when available.
+    This will start the container (named `blackbird_sports_uploader`) in detached mode, running the `sync` command with `--loop` enabled. It will monitor for the device, sync when available, and pause for a configurable interval (default 5 mins) between syncs.
 
 2.  **View Logs**:
 

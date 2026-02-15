@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # Auto-login credentials (optional)
     BB_USERNAME: Optional[str] = None
     BB_PASSWORD: Optional[str] = None
+    
+    # Sync Configuration
+    SYNC_INTERVAL: int = 300  # Seconds to wait between syncs in loop mode (default 5 mins)
 
     # API Configuration
     BASE_URL: str = "https://client.blackbirdsport.com"
