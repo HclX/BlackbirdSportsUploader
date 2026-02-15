@@ -215,10 +215,28 @@ def sync(
 
     session = get_session()
     if not session:
-        msg = "No session found. Please login first."
-        logger.warning(msg)
-        typer.echo(msg)
-        return
+        # Try auto-login if credentials are provided via environment variables
+        if settings.BB_USERNAME and settings.BB_PASSWORD:
+            logger.info("No active session found. Attempting auto-login...")
+            typer.echo("No active session found. Attempting auto-login...")
+            try:
+                # authenticate returns a tuple: (cookies, account_id, ton)
+                cookies, account_id, ton = authenticate(None, settings.BB_USERNAME, settings.BB_PASSWORD)
+                save_session(ton, settings.BB_USERNAME, account_id, cookies)
+                # Reload session to get the SessionData object
+                session = get_session()
+                logger.info("Auto-login successful.")
+                typer.echo("Auto-login successful.")
+            except Exception as e:
+                msg = f"Auto-login failed: {e}"
+                logger.error(msg)
+                typer.echo(msg)
+                return
+        else:
+            msg = "No session found. Please login first."
+            logger.warning(msg)
+            typer.echo(msg)
+            return
 
     # 1. Scan and Download
     logger.info("Starting device sync...")

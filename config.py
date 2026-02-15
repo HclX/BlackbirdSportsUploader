@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # Device
     BLE_ADDRESS: Optional[str] = None  # MAC address of the device
 
+    # Auto-login credentials (optional)
+    BB_USERNAME: Optional[str] = None
+    BB_PASSWORD: Optional[str] = None
+
     # API Configuration
     BASE_URL: str = "https://client.blackbirdsport.com"
 
