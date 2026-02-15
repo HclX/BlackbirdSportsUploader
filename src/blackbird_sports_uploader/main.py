@@ -1,5 +1,6 @@
 import typer
 import time
+import asyncio
 import json
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
@@ -208,11 +209,23 @@ def sync(
     Automated sync: Scan, Download, and Upload new records.
     Default behavior is to run in a continuous loop. Use --once to run a single iteration.
     """
+    asyncio.run(async_sync_loop(once))
+
+async def async_sync_loop(once: bool):
+    """
+    Async loop for synchronization.
+    """
     if not settings.DATA_DIR.exists():
         settings.DATA_DIR.mkdir(parents=True)
 
     while True:
-        if not bb16.download():
+        # Use async download
+        if not await bb16.download():
+            if once:
+                 break
+            # If download fails, wait a bit before retrying
+            logger.info(f"Waiting {settings.SYNC_INTERVAL}s before next cycle...")
+            await asyncio.sleep(settings.SYNC_INTERVAL)
             continue
 
         history = load_history()
@@ -251,7 +264,9 @@ def sync(
                 continue
 
             logger.info(f"Uploading {f.name} (ID: {record_id})...")
-            if not upload_record(session, zip_data, record_id, fittime):
+            # upload_record is synchronous (requests). That's fine for now, 
+            # or we could make it async later.
+            if not upload_record(session.ton, zip_data, record_id, fittime):
                 logger.error(f"Failed to upload {f.name}")
                 continue
 
@@ -259,14 +274,14 @@ def sync(
             history.add(f.name)
             save_history(history)
 
-        logger.info("All records already uploaded.")
+        logger.info("All records processed.")
         if once:
             logger.info("Sync completed.")
             typer.echo("Sync completed.")
             break
 
         logger.info(f"Sync cycle completed successfully. Sleeping for {settings.SYNC_INTERVAL} seconds...")
-        time.sleep(settings.SYNC_INTERVAL)
+        await asyncio.sleep(settings.SYNC_INTERVAL)
 
 if __name__ == "__main__":
     app()

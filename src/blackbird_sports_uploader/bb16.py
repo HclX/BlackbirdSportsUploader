@@ -524,27 +524,26 @@ class BB16:
 
         return updated_records
 
-async def _run(address, data_dir):
-    logger.info(f"Connecting to device {address}...")
-
-    async with BB16(address) as bb16:
-        updated_records = await bb16.sync(data_dir)
-        logger.info(f"Updated records: {updated_records}")
-
-def download() -> bool:
-    # Run the async function
+async def download() -> bool:
+    """
+    Download records from the device (Async).
+    """
     address = settings.BLE_ADDRESS
     assert address, "BLE_ADDRESS not set in settings."
 
     data_dir = str(settings.DATA_DIR)
     os.makedirs(data_dir, exist_ok=True)
 
+    logger.info(f"Connecting to device {address}...")
+
     try:
-        asyncio.run(_run(address, data_dir))
+        async with BB16(address) as bb16:
+            updated_records = await bb16.sync(data_dir)
+            logger.info(f"Updated records: {updated_records}")
+        return True
     except BleakDeviceNotFoundError:
         logger.error(f"Device {address} not found...")
         return False
     except Exception as e:
         logger.error(f"Error during BLE connection: {e}")
         return False
-    return True
