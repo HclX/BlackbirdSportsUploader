@@ -1,7 +1,6 @@
 import zipfile
 import requests
 import io
-from typing import Dict, Any
 from config import settings
 from logger import setup_logging
 
@@ -30,29 +29,22 @@ def compress_xml(xml_content: str, record_id: str) -> bytes:
 
 
 def upload_record(
+    token: str,
     zip_data: bytes,
-    ton: str,
     record_id: str,
     fittime: str,
-    device_type: str = settings.DEVICE_TYPE,
-    sn: str = settings.DEVICE_SN,
-) -> Dict[str, Any]:
+) -> bool:
     """
     Upload the compressed record to the server.
 
     Args:
+        token: Session token.
         zip_data: Compressed XML record.
-        ton: Session token.
         record_id: Local record ID (timestamp string).
         fittime: FIT timestamp string (ms).
-        device_type: Device type identifier.
-        sn: Device serial number.
 
     Returns:
-        The JSON response from the server.
-
-    Raises:
-        Exception: If upload fails or API returns error status.
+        True if upload successful, False otherwise.
     """
     url = f"{settings.BASE_URL}/bk_uploadRecord"
 
@@ -63,9 +55,9 @@ def upload_record(
     }
 
     params = {
-        "ton": ton,
-        "deviceType": device_type,
-        "sn": sn,
+        "ton": token,
+        "deviceType": settings.DEVICE_TYPE,
+        "sn": settings.DEVICE_SN,
         "fittime": fittime,
         "localRecordId": record_id,
     }
@@ -78,17 +70,13 @@ def upload_record(
         response = requests.post(
             url, files=files, params=params, headers=headers, timeout=30
         )
-        response.raise_for_status()
-
         result = response.json()
         if result.get("status") != "ok":
             error_msg = result.get("msg", "Unknown error")
             logger.error(f"Upload failed: {error_msg}. Response: {result}")
-            raise Exception(f"Upload failed: {error_msg}")
-
+            return False
         logger.info(f"Upload successful for record {record_id}")
-        return result
-
+        return True
     except requests.RequestException as e:
         logger.error(f"Network error during upload: {e}")
-        raise
+        return False

@@ -10,6 +10,7 @@ from fit_processor import FitProcessor
 from uploader import compress_xml, upload_record
 from config import settings
 from logger import setup_logging
+import device
 
 # Setup logger for main module
 logger = setup_logging("main")
@@ -201,191 +202,71 @@ def upload(
 def sync(
     device_type: str = typer.Option(settings.DEVICE_TYPE, help="Device type (e.g. android, ios)"),
     sn: str = typer.Option(settings.DEVICE_SN, help="Device Serial Number"),
-    wait: bool = typer.Option(False, help="Wait for device to appear if not found immediately."),
-    loop: bool = typer.Option(False, help="Run in a continuous loop with a pause between syncs."),
+    once: bool = typer.Option(False, help="Run once and exit (disable continuous loop)."),
 ) -> None:
     """
     Automated sync: Scan, Download, and Upload new records.
+    Default behavior is to run in a continuous loop. Use --once to run a single iteration.
     """
-    try:
-        from device_sync import scan_and_download, wait_for_device
-    except ImportError as e:
-        msg = f"Error: device_sync module not found: {e}"
-        logger.error(msg)
-        typer.echo(msg)
-        return
-
-    # In loop mode, we imply wait=True because a service should wait for the device
-    if loop:
-        wait = True
-        logger.info(f"Loop mode enabled. Syncing every {settings.SYNC_INTERVAL} seconds.")
+    if not settings.DATA_DIR.exists():
+        settings.DATA_DIR.mkdir(parents=True)
 
     while True:
-        try:
-            success = _sync_once(device_type, sn, wait, loop)
-            if loop and success:
-                logger.info(f"Sync successful. Sleeping for {settings.SYNC_INTERVAL} seconds...")
-                time.sleep(settings.SYNC_INTERVAL)
-            elif loop:
-                 # If failed or no new records, maybe wait a bit less or just continue to wait_for_device
-                 # But wait_for_device will block until device appears.
-                 # If device is connected but sync failed (e.g. auth error), we should probably not hammer it.
-                 # For now, let's treat "no new records" as success for sleeping purposes?
-                 # Actually user said "once sync finishes... pause... after a successful sync". 
-                 # Let's interpret "successful sync" as "we connected and checked".
-                 pass
+        if not device.download():
+            continue
 
-        except Exception as e:
-            logger.error(f"Error during sync iteration: {e}")
-            if not loop:
-                raise typer.Exit(code=1)
-            # On error in loop, wait a bit to avoid tight loop log spam
-            time.sleep(10)
-        
-        if not loop:
-            break
+        history = load_history()
+        new_files = [f for f in settings.DATA_DIR.glob("*.fit") if f.name not in history]
+        logger.info(f"Found {len(new_files)} new records.")
 
-
-def _sync_once(device_type: str, sn: str, wait: bool, is_loop_mode: bool) -> bool:
-    """
-    Helper function to perform a single sync operation.
-    Returns True if sync/check completed (even if no new records), False if critical error.
-    """
-    try:
-        from device_sync import scan_and_download
-    except ImportError as e:
-        msg = f"Error: device_sync module not found: {e}"
-        logger.error(msg)
-        if not is_loop_mode:
-            typer.echo(msg)
-        return False
-
-    session = get_session()
-    if not session:
-        # Try auto-login if credentials are provided via environment variables
-        if settings.BB_USERNAME and settings.BB_PASSWORD:
-            logger.info("No active session found. Attempting auto-login...")
-            if not is_loop_mode: # avoid spamming stdout in loop
-                typer.echo("No active session found. Attempting auto-login...")
-            try:
+        session = get_session()
+        if not session:
+            # Try auto-login if credentials are provided
+            if settings.BB_USERNAME and settings.BB_PASSWORD:
+                logger.info("No active session found. Attempting auto-login...")
                 # authenticate returns a tuple: (cookies, account_id, ton)
                 cookies, account_id, ton = authenticate(None, settings.BB_USERNAME, settings.BB_PASSWORD)
                 save_session(ton, settings.BB_USERNAME, account_id, cookies)
                 # Reload session to get the SessionData object
                 session = get_session()
                 logger.info("Auto-login successful.")
-                if not is_loop_mode:
-                    typer.echo("Auto-login successful.")
-            except Exception as e:
-                msg = f"Auto-login failed: {e}"
-                logger.error(msg)
-                # without session we can't do anything, so raising to be caught by loop
-                raise Exception(msg)
-        else:
-            msg = "No session found. Please login first."
-            logger.warning(msg)
-            if not is_loop_mode:
-                typer.echo(msg)
-            raise Exception(msg)
-
-    # 1. Scan and Download
-    logger.info("Starting device sync...")
-    if not is_loop_mode:
-        typer.echo("Starting device sync...")
-    scan_and_download(wait=wait)
-
-    if not settings.DATA_DIR.exists():
-        msg = "No data directory found."
-        logger.warning(msg)
-        if not is_loop_mode:
-            typer.echo(msg)
-        return
-
-    # 2. Check Memory
-    history = load_history()
-    files = list(settings.DATA_DIR.glob("*.fit"))
-    logger.info(f"Found {len(files)} records locally in {settings.DATA_DIR}.")
-    if not is_loop_mode:
-        typer.echo(f"Found {len(files)} records locally.")
-
-    new_files = [f for f in files if f.name not in history]
-
-    if not new_files:
-        msg = "All records already uploaded."
-        logger.info(msg)
-        if not is_loop_mode:
-            typer.echo(msg)
-        return True # Considered success (checked and nothing to do)
-
-    msg = f"Found {len(new_files)} new records to upload."
-    logger.info(msg)
-    if not is_loop_mode:
-        typer.echo(msg)
-
-    # 3. Upload loop
-    for fit_file in new_files:
-        try:
-            logger.info(f"Processing {fit_file.name}...")
-            if not is_loop_mode:
-                typer.echo(f"Processing {fit_file.name}...")
-
-            try:
-                account_id = int(session.accountId)
-            except ValueError:
-                account_id = 0
-                logger.warning("accountId is not an integer. Using 0 for fingerprint.")
-
-            processor = FitProcessor(str(fit_file), account_id)
-            processor.parse()
-            xml_content = processor.generate_xml()
-
-            timestamp_ms = int(processor.start_time)
-            
-            # Use timestamp from processor to generate record ID
-            # Original code used generate_params from uploader.py? 
-            # Let's import it or replicate usage.
-            # Checking uploader.py usage in previous view_file would be ideal but let's assume standard way
-            # processor.start_time is float/int timestamp
-            
-            # The original code imported generate_params
-            from uploader import generate_params, compress_xml
-            
-            record_id, fittime = generate_params(timestamp_ms)
-
-            zip_data = compress_xml(xml_content, record_id)
-
-            logger.info(f"Uploading {fit_file.name} (ID: {record_id})...")
-            if not is_loop_mode:
-                typer.echo(f"Uploading {fit_file.name} (ID: {record_id})...")
-
-            result = upload_record(
-                zip_data, session.ton, record_id, fittime, device_type, sn
-            )
-
-            if result:
-                msg = f"Upload successful: {result}"
-                logger.info(msg)
-                if not is_loop_mode:
-                    typer.echo(msg)
-                history.add(fit_file.name)
-                save_history(history)
             else:
-                 msg = f"Failed to upload {fit_file.name}"
-                 logger.error(msg)
-                 if not is_loop_mode:
-                     typer.echo(msg)
+                msg = "No session found. Please login first."
+                logger.warning(msg)
+                return
+                
+        account_id = int(session.accountId)
+        for f in new_files:
+            logger.info(f"Processing {f.name}...")
+            try:
+                processor = FitProcessor(str(f), account_id)
+                processor.parse()
+                xml_content = processor.generate_xml()
+                timestamp_ms = int(processor.start_time)
+                            
+                record_id, fittime = generate_params(timestamp_ms)
+                zip_data = compress_xml(xml_content, record_id)
+            except Exception as e:
+                logger.error(f'Error processing {f.name}: {e}')
+                continue
 
-        except Exception as e:
-            msg = f"Error during upload of {fit_file.name}: {e}"
-            logger.error(msg)
-            if not is_loop_mode:
-                typer.echo(msg)
-            # Continue to next file
-    
-    return True
+            logger.info(f"Uploading {f.name} (ID: {record_id})...")
+            if not upload_record(session, zip_data, record_id, fittime):
+                logger.error(f"Failed to upload {f.name}")
+                continue
 
-    return True
+            logger.info(f"Upload successful: {f.name}")
+            history.add(f.name)
+            save_history(history)
 
+        logger.info("All records already uploaded.")
+        if once:
+            logger.info("Sync completed.")
+            typer.echo("Sync completed.")
+            break
+
+        logger.info(f"Sync cycle completed successfully. Sleeping for {settings.SYNC_INTERVAL} seconds...")
+        time.sleep(settings.SYNC_INTERVAL)
 
 if __name__ == "__main__":
     app()

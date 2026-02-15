@@ -5,7 +5,8 @@ import os
 from typing import List, Type, ClassVar, Tuple, Dict, Any, TypeVar
 from enum import Enum
 
-from bleak import BleakClient, BleakScanner
+from bleak import BleakClient
+from bleak.exc import BleakDeviceNotFoundError
 from pure_protobuf.annotations import Field, ZigZagInt
 from pure_protobuf.message import BaseMessage
 from typing_extensions import Annotated
@@ -435,7 +436,7 @@ class BB16:
 
     async def connect(self):
         self.client = BleakClient(self.address)
-        await self.client.connect()
+        await self.client.connect(timeout=20.0)
         self.get_stream = await PacketStream.create(self.client, UUID_COMMON_GET)
         self.push_stream = await PacketStream.create(self.client, UUID_COMMON_PUSH)
         self.post_stream = await PacketStream.create(self.client, UUID_COMMON_POST)
@@ -523,55 +524,27 @@ class BB16:
 
         return updated_records
 
+async def _run(address, data_dir):
+    logger.info(f"Connecting to device {address}...")
 
-async def wait_for_device(address: str) -> None:
-    """
-    Waits for the device with the given address to be available.
-    """
-    logger.info(f"Waiting for device {address} to appear...")
-    print(f"Waiting for device {address} (Press Ctrl+C to abort)...")
-    
-    while True:
-        device = await BleakScanner.find_device_by_address(address, timeout=5.0)
-        if device:
-            logger.info(f"Device {address} found!")
-            print(f"Device {address} found!")
-            return
-        logger.debug(f"Device {address} not found yet, retrying...")
+    async with BB16(address) as bb16:
+        updated_records = await bb16.sync(data_dir)
+        logger.info(f"Updated records: {updated_records}")
 
-
-def scan_and_download(wait: bool = False) -> None:
-    """
-    Scans for BB16 device and downloads new records using settings.BLE_ADDRESS.
-    """
+def download() -> bool:
+    # Run the async function
     address = settings.BLE_ADDRESS
-    if not address:
-        logger.error("BLE_ADDRESS not configured in settings or environment.")
-        # Try to scan? No, BLE requires address usually or we build a scanner.
-        # The original code implied scanning, but the new code connects to specific address.
-        # Let's try to scan if address is missing, or just error out.
-        # The new code expects an address.
-        # If the user doesn't provide it, we could use bleak.BleakScanner to find "BB16".
-        # But for now let's error or warn.
-        logger.info("Please set BLE_ADDRESS in .env or environment variable.")
-        return
+    assert address, "BLE_ADDRESS not set in settings."
 
-    async def _run():
-        if wait:
-            await wait_for_device(address)
-        
-        logger.info(f"Connecting to device {address}...")
-        try:
-            async with BB16(address) as bb16:
-                updated_records = await bb16.sync(str(settings.DATA_DIR))
-                logger.info(f"Updated records: {updated_records}")
-        except Exception as e:
-            logger.error(f"Error during BLE sync: {e}")
+    data_dir = str(settings.DATA_DIR)
+    os.makedirs(data_dir, exist_ok=True)
 
     try:
-        asyncio.run(_run())
-    except KeyboardInterrupt:
-        logger.info("Sync aborted by user.")
-        print("\nAborted.")
+        asyncio.run(_run(address, data_dir))
+    except BleakDeviceNotFoundError:
+        logger.error(f"Device {address} not found...")
+        return False
     except Exception as e:
-        logger.error(f"Failed to run async sync: {e}")
+        logger.error(f"Error during BLE connection: {e}")
+        return False
+    return True
