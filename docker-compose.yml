@@ -1,0 +1,17 @@
+services:
+  app:
+    build: .
+    image: bb16-script:latest
+    container_name: bb16-script
+    # Host network mode is crucial for BLE access on Linux
+    network_mode: host
+    privileged: true
+    volumes:
+      # Data persistence
+      - ./data:/app/data
+      # Configuration
+      - ./.env:/app/.env
+      # BLE socket access (Linux only)
+      - /var/run/dbus:/var/run/dbus
+    restart: unless-stopped
+    command: python main.py sync --wait
