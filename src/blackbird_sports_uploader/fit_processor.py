@@ -4,7 +4,7 @@ import time
 from typing import List, Dict, Any
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
-from logger import setup_logging
+from .logger import setup_logging
 
 logger = setup_logging(__name__)
 

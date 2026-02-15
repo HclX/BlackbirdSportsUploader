@@ -5,12 +5,12 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Set, Tuple, Optional
 
-from auth import get_session, save_session, authenticate, get_user_info
-from fit_processor import FitProcessor
-from uploader import compress_xml, upload_record
-from config import settings
-from logger import setup_logging
-import device
+from .auth import get_session, save_session, authenticate, get_user_info
+from .fit_processor import FitProcessor
+from .uploader import compress_xml, upload_record
+from .config import settings
+from .logger import setup_logging
+from . import device
 
 # Setup logger for main module
 logger = setup_logging("main")

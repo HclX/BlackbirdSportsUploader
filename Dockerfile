@@ -25,10 +25,12 @@ RUN uv sync --frozen --no-install-project
 # Copy the rest of the application
 COPY . .
 
+# Install the package
+RUN uv pip install .
+
 # Environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Entrypoint using uv run (or directly python if deps are installed in system/venv)
-# Since we used uv sync, it creates a .venv. We can run directly from it.
-CMD ["python", "main.py", "--help"]
+# Entrypoint
+CMD ["blackbird-sync", "--help"]

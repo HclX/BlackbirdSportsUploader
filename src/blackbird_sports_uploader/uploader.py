@@ -1,8 +1,8 @@
 import zipfile
 import requests
 import io
-from config import settings
-from logger import setup_logging
+from .config import settings
+from .logger import setup_logging
 
 logger = setup_logging(__name__)
 

@@ -14,4 +14,4 @@ services:
       # BLE socket access (Linux only)
       - /var/run/dbus:/var/run/dbus
     restart: unless-stopped
-    command: python main.py sync
+    command: blackbird-sync sync

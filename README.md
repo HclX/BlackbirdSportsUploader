@@ -18,125 +18,41 @@ A Python-based tool for synchronizing, processing, and uploading workout data fr
 
 ## Installation
 
-This project uses `pyproject.toml` for dependency management. You can install the dependencies using `pip` or `uv`.
-
-### Using pip
+### pip/uv
 
 ```bash
+uv pip install .
+# or
 pip install .
 ```
 
-### Using uv (Recommended)
-
-If you have `uv` installed:
-
-```bash
-uv sync
-```
-
-## Configuration
-
-1.  **Create the Environment File**:
-    Copy the example environment file to `.env`:
-
-    ```bash
-    cp .env.example .env
-    ```
-
-    *(On Windows PowerShell: `Copy-Item .env.example .env`)*
-
-2.  **Edit `.env`**:
-    Open `.env` in a text editor and configure the following:
-
-    -   `BLE_ADDRESS`: **Required** for the `sync` command. The MAC address of your BB16 device (e.g., `C3:26:30:11:22:33`).
-    -   Other optional fields (`DEVICE_SN`, etc.) can usually be left as default unless you need to spoof a specific device identity.
-
-## Docker Usage
-
-Prior to running with Docker, ensure you have a `.env` file configured.
-
-### Prerequisites (Docker)
-
--   Docker and Docker Compose installed.
--   **Linux Host**: For BLE access to work, the container must run on a Linux host with generic Bluetooth drivers available. Windows/Mac Docker Desktop does not typically support host Bluetooth pass-through.
-
-### Running with Docker Compose
-
-1.  **Build and Run**:
-
-    ```bash
-    docker-compose up -d --build
-    ```
-
-    This will start the container (named `blackbird_sports_uploader`) in detached mode, running the `sync` command. By default, it runs in specific interval (default 5 mins) between syncs. Use `--once` to run only one time.
-
-2.  **View Logs**:
-
-    ```bash
-    docker-compose logs -f
-    ```
-
-3.  **Run Custom Commands**:
-
-    ```bash
-    docker-compose run --rm app python main.py info
-    ```
-
 ## Usage
 
-The script provides a Command Line Interface (CLI) via `main.py`.
-
-### 1. Login
-
-First, log in to your Blackbird account. This will cache your session token locally.
+After installation, the `blackbird-sync` command is available:
 
 ```bash
-python main.py login
+# Start continuous sync loop
+blackbird-sync sync
+
+# Run a single sync iteration
+blackbird-sync sync --once
+
+# Show help
+blackbird-sync --help
 ```
-*You will be prompted for your User ID (phone/email) and Password.*
 
-### 2. Device Sync (Automated)
-
-To automatically scan for your device (configured in `.env`), download new `.fit` files, and upload them:
+### Docker
 
 ```bash
-python main.py sync
+docker-compose up -d
 ```
-
-You can control whether to wait for the device to appear (default is False):
-
-```bash
-# Wait for the device to appear
-python main.py sync --wait
-```
-
-### 3. Manual Upload
-
-If you already have a `.fit` file locally and want to upload it:
-
-```bash
-python main.py upload <path_to_fit_file>
-```
-
-### 4. Other Commands
-
--   **Check User Info**:
-    View your current account details and verify your session.
-    ```bash
-    python main.py info
-    ```
-
--   **Convert File**:
-    Convert a `.fit` file to the XML format for debugging purposes (prints to stdout).
-    ```bash
-    python main.py convert <path_to_fit_file>
-    ```
 
 ## Project Structure
 
--   `main.py`: Entry point for the CLI.
--   `device_sync.py`: Handles BLE communication and file downloading.
--   `fit_processor.py`: Parses `.fit` files using `fitdecode` and generates XML.
--   `uploader.py`: Handles file compression and HTTP requests to the server.
--   `auth.py`: Manages authentication and session storage.
--   `config.py`: Configuration management using `pydantic-settings`.
+-   `src/blackbird_sports_uploader/`: Source code package.
+    -   `main.py`: Entry point.
+    -   `device.py`: BLE communication.
+    -   `fit_processor.py`: FIT file parsing.
+    -   `uploader.py`: API interaction.
+-   `tests/`: Unit tests.
+

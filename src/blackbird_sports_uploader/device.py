@@ -12,8 +12,8 @@ from pure_protobuf.message import BaseMessage
 from typing_extensions import Annotated
 from pydantic import BaseModel, ConfigDict
 
-from config import settings
-from logger import setup_logging
+from .config import settings
+from .logger import setup_logging
 
 logger = setup_logging(__name__)
 

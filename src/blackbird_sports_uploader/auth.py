@@ -2,8 +2,8 @@ import time
 import requests
 from typing import Optional, Dict, Tuple, Any
 from pydantic import BaseModel
-from config import settings
-from logger import setup_logging
+from .config import settings
+from .logger import setup_logging
 
 logger = setup_logging(__name__)
 
