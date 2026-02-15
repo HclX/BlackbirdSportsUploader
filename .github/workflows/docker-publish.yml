@@ -10,6 +10,7 @@ on:
       - 'uv.lock'
       - '*.py'
       - '.github/workflows/docker-publish.yml'
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -40,6 +41,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/release' }}
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/main' }}
             type=sha,format=long
 
       - name: Build and push Docker image
