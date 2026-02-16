@@ -546,15 +546,12 @@ async def download() -> bool:
     data_dir = str(settings.DATA_DIR)
     os.makedirs(data_dir, exist_ok=True)
 
-    logger.debug(f"Connecting to device {address}...")
-
     try:
         async with BB16(address) as bb16:
             updated_records = await bb16.sync(data_dir, settings.SYNC_ONLY_N_DAYS)
             logger.info(f"Updated records: {updated_records}")
         return True
     except BleakDeviceNotFoundError:
-        logger.debug(f"Device {address} not found...")
         return False
     except Exception as e:
         logger.error(f"Error during BLE connection: {e}")

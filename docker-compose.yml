@@ -10,7 +10,7 @@ services:
       # Data persistence
       - ./data:/app/data
       # Configuration
-      - ./.env:/app/.env
+      - ./env:/app/.env
       # BLE socket access (Linux only)
       - /var/run/dbus:/var/run/dbus
     environment:

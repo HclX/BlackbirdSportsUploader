@@ -223,8 +223,7 @@ async def async_sync_loop(once: bool):
             if once:
                  break
             # If download fails, wait a bit before retrying
-            logger.info("Waiting 3s before next cycle...")
-            await asyncio.sleep(3)
+            await asyncio.sleep(5)
             continue
 
         history = load_history()
