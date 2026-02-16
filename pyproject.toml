@@ -11,7 +11,6 @@ dependencies = [
     "pydantic>=2.12.5",
     "pydantic-settings>=2.12.0",
     "requests>=2.32.5",
-    "typer>=0.23.0",
     "typing-extensions>=4.15.0",
 ]
 
@@ -19,7 +18,7 @@ dependencies = [
 dev = ["pytest"]
 
 [project.scripts]
-blackbird-sync = "blackbird_sports_uploader.main:app"
+blackbird-uploader = "blackbird_sports_uploader.main:run"
 
 [build-system]
 requires = ["hatchling"]

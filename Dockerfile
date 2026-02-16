@@ -33,4 +33,4 @@ ENV PYTHONUNBUFFERED=1
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Entrypoint
-CMD ["blackbird-sync", "--help"]
+CMD ["blackbird-uploader"]

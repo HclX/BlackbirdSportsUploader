@@ -9,22 +9,22 @@ logger = setup_logging(__name__)
 
 
 class SessionData(BaseModel):
-    ton: str
+    token: str
     userId: str
     cookies: Dict[str, str] = {}
     accountId: str = ""
 
 
 def save_session(
-    ton: str, user_id: str, account_id: str, cookies: Dict[str, str]
+    token: str, user_id: str, account_id: str, cookies: Dict[str, str]
 ) -> None:
     """Save session data to a local file for persistence."""
     session = SessionData(
-        ton=ton, userId=user_id, accountId=account_id, cookies=cookies
+        token=token, userId=user_id, accountId=account_id, cookies=cookies
     )
     try:
         with open(settings.SESSION_FILE, "w") as f:
-            f.write(session.model_dump_json())
+            f.write(session.model_dump_json(indent=4))
         logger.info(f"Session saved to {settings.SESSION_FILE}")
     except IOError as e:
         logger.error(f"Failed to save session: {e}")
@@ -88,14 +88,14 @@ def set_client() -> str:
         logger.error(f"Network error during setClient: {e}")
         raise
 
-def authenticate(ton: Optional[str], user_id: str, password: str) -> Tuple[Dict[str, str], str, str]:
+def authenticate(user_id: str, password: str, token:Optional[str]=None) -> Tuple[Dict[str, str], str, str]:
     """
     Authenticate with the Blackbird Sport server.
     
     Args:
-        ton: The session token. If None, it will be retrieved automatically.
         user_id: The user email/ID.
         password: The user password.
+        token: The session token. If None, it will be retrieved automatically.
         
     Returns:
         Tuple containing cookies dictionary, accountId string, and the ton used.
@@ -103,12 +103,12 @@ def authenticate(ton: Optional[str], user_id: str, password: str) -> Tuple[Dict[
     Raises:
         Exception: If login fails or API returns error status.
     """
-    if not ton:
-        ton = set_client()
+    if not token:
+        token = set_client()
         
     url = f"{settings.BASE_URL}/bk_login"
     params = {
-        "ton": ton,
+        "ton": token,
         "userId": user_id,
         "password": password,
         "timeStamp": str(int(time.time() * 1000))
@@ -130,19 +130,19 @@ def authenticate(ton: Optional[str], user_id: str, password: str) -> Tuple[Dict[
 
         account_id = str(data.get("user", {}).get("accountId", ""))
         logger.info(f"Authentication successful for accountId: {account_id}")
-        return response.cookies.get_dict(), account_id, ton
+        return response.cookies.get_dict(), account_id, token
 
     except requests.RequestException as e:
         logger.error(f"Network error during authentication: {e}")
         raise
 
 
-def get_user_info(ton: str, friend_id: str, cookies: Dict[str, str]) -> Dict[str, Any]:
+def get_user_info(token: str, friend_id: str, cookies: Dict[str, str]) -> Dict[str, Any]:
     """
     Retrieve user information.
 
     Args:
-        ton: Session token.
+        token: Session token.
         friend_id: User/Friend ID.
         cookies: Session cookies.
 
@@ -150,7 +150,7 @@ def get_user_info(ton: str, friend_id: str, cookies: Dict[str, str]) -> Dict[str
         Dictionary containing user info.
     """
     url = f"{settings.BASE_URL}/bk_getUserInfo"
-    params = {"ton": ton, "friendId": friend_id}
+    params = {"ton": token, "friendId": friend_id}
     headers = {
         "User-Agent": settings.USER_AGENT
     }

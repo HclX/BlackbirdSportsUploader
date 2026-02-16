@@ -1,11 +1,9 @@
-import typer
 import asyncio
 import json
-from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Set, Tuple, Optional
 
-from .auth import get_session, save_session, authenticate, get_user_info
+from .auth import get_session, save_session, authenticate, get_user_info, SessionData
 from .fit_processor import FitProcessor
 from .uploader import compress_xml, upload_record
 from .config import settings
@@ -14,9 +12,6 @@ from . import bb16
 
 # Setup logger for main module
 logger = setup_logging("main")
-
-app = typer.Typer()
-
 
 def get_beijing_time(timestamp_ms: int) -> datetime:
     """Convert UTC timestamp (ms) to Beijing Time (UTC+8)."""
@@ -63,223 +58,95 @@ def save_history(history: Set[str]) -> None:
     except IOError as e:
         logger.error(f"Failed to save history: {e}")
 
-
-@app.command()
-def login(
-    user_id: str = typer.Option(..., prompt=True),
-    password: str = typer.Option(..., prompt=True, hide_input=True),
-    ton: Optional[str] = typer.Option(None, help="Session Token (ton). If not provided, it will be retrieved automatically.")
-) -> None:
-    """
-    Login and cache session token.
-    If 'ton' is not provided, it will be automatically retrieved via bk_setClient.
-    """
-    logger.info("Attempting login...")
-    try:
-        cookies, account_id, used_ton = authenticate(ton, user_id, password)
-        save_session(used_ton, user_id, account_id, cookies)
-        msg = f"Login successful! Session cached. Account ID: {account_id}"
-        logger.info(msg)
-        typer.echo(msg)
-    except Exception as e:
-        logger.error(f"Login failed: {e}")
-        typer.echo(f"Login failed: {e}")
-        raise typer.Exit(code=1)
-
-
-@app.command()
-def info() -> None:
-    """
-    Get user info using cached session.
-    """
+def verify_session() -> Optional[SessionData]:
+    token = None
     session = get_session()
-    if not session:
-        msg = "No session found. Please login first."
-        logger.warning(msg)
-        typer.echo(msg)
-        return
 
-    try:
-        # Use accountId for friendId
-        info_data = get_user_info(session.ton, session.accountId, session.cookies)
-        logger.info("User Info retrieved successfully")
-        typer.echo(f"User Info: {info_data}")
-    except Exception as e:
-        logger.error(f"Failed to get info: {e}")
-        typer.echo(f"Failed to get info: {e}")
+    if session:
+        token = session.token
 
-
-@app.command()
-def convert(fit_file: Path) -> None:
-    """
-    Convert a .fit file to the XML format and print it.
-    """
-    if not fit_file.exists():
-        msg = f"File not found: {fit_file}"
-        logger.error(msg)
-        typer.echo(msg)
-        return
-
-    # Use dummy account ID for pure conversion test
-    try:
-        processor = FitProcessor(str(fit_file), 123456)
-        processor.parse()
-        xml_output = processor.generate_xml()
-        print(xml_output)
-    except Exception as e:
-        logger.error(f"Conversion failed: {e}")
-        typer.echo(f"Conversion failed: {e}")
-
-
-@app.command()
-def upload(
-    fit_file: Path,
-    device_type: str = typer.Option(settings.DEVICE_TYPE, help="Device type (e.g. android, ios)"),
-    sn: str = typer.Option(settings.DEVICE_SN, help="Device Serial Number"),
-) -> None:
-    """
-    Convert and upload a .fit file to the server.
-    """
-    session = get_session()
-    if not session:
-        msg = "No session found. Please login first."
-        logger.warning(msg)
-        typer.echo(msg)
-        return
-
-    if not fit_file.exists():
-        msg = f"File not found: {fit_file}"
-        logger.error(msg)
-        typer.echo(msg)
-        return
-
-    try:
-        logger.info(f"Starting upload process for {fit_file}")
-        typer.echo("Parsing FIT file...")
-
-        # Use cached accountId
+        # Try to verify session by getting user info
         try:
-            account_id = int(session.accountId)
-        except ValueError:
-            account_id = 0
-            logger.warning("accountId is not an integer. Using 0 for fingerprint.")
+            info_data = get_user_info(token, session.accountId, session.cookies)
+            logger.info(f"User Info retrieved successfully: {info_data}")
+        except Exception:
+            logger.error("Failed to get info, will re-authenticate")
+            session = None
 
-        processor = FitProcessor(str(fit_file), account_id)
-        processor.parse()
-        xml_content = processor.generate_xml()
+    if not session:
+        # Try auto-login if credentials are provided
+        if None in (settings.BB_USERNAME, settings.BB_PASSWORD):
+            logger.error("No active session found. Please login first.")
+            return None
 
-        # XML filename uses recordId.
-        timestamp_ms = int(processor.start_time * 1000)  # Ensure ms
-        # Wait, start_time in processor is seconds (float) or ms?
-        # In processor refactor: self.start_time = val.timestamp() * 1000 # ms
-        # Wait, check fit_processor again.
-        # In original: self.start_time = frame.get_value('start_time').timestamp() * 1000 # ms
-        # In refactor: self.start_time = val.timestamp() * 1000 # ms
-        # So it is ms.
-        timestamp_ms = int(processor.start_time)
+        logger.info("No active session found. Attempting auto-login...")
+        # authenticate returns a tuple: (cookies, account_id, ton)
+        cookies, account_id, token = authenticate(settings.BB_USERNAME, settings.BB_PASSWORD, token)
+        save_session(token, settings.BB_USERNAME, account_id, cookies)
+        # Reload session to get the SessionData object
+        session = get_session()
+        logger.info("Auto-login successful.")
 
-        record_id, fittime = generate_params(timestamp_ms)
+    return session
 
-        typer.echo(f"Compressing with Record ID: {record_id}...")
-        zip_data = compress_xml(xml_content, record_id)
-
-        typer.echo(f"Uploading... (fittime={fittime})")
-
-        result = upload_record(
-            zip_data, session.ton, record_id, fittime, device_type, sn
-        )
-        msg = f"Upload successful: {result}"
-        logger.info(msg)
-        typer.echo(msg)
-
-    except Exception as e:
-        msg = f"Error during upload: {e}"
-        logger.error(msg)
-        typer.echo(msg)
-
-
-@app.command()
-def sync(
-    device_type: str = typer.Option(settings.DEVICE_TYPE, help="Device type (e.g. android, ios)"),
-    sn: str = typer.Option(settings.DEVICE_SN, help="Device Serial Number"),
-    once: bool = typer.Option(False, help="Run once and exit (disable continuous loop)."),
-) -> None:
+async def do_sync(session: SessionData) -> bool:
     """
-    Automated sync: Scan, Download, and Upload new records.
-    Default behavior is to run in a continuous loop. Use --once to run a single iteration.
+    Synchronizing data from device to server
+    return True if sync is successful, False otherwise
     """
-    asyncio.run(async_sync_loop(once))
+    if not await bb16.download():
+        return False
 
-async def async_sync_loop(once: bool):
-    """
-    Async loop for synchronization.
-    """
-    if not settings.DATA_DIR.exists():
-        settings.DATA_DIR.mkdir(parents=True)
+    history = load_history()
+    new_files = [f for f in settings.DATA_DIR.glob("*.fit") if f.name not in history]
+    logger.info(f"Found {len(new_files)} new records.")
 
-    while True:
-        # Use async download
-        if not await bb16.download():
-            if once:
-                 break
-            # If download fails, wait a bit before retrying
-            await asyncio.sleep(5)
+    account_id = int(session.accountId)
+    for f in new_files:
+        logger.info(f"Processing {f.name}...")
+        try:
+            processor = FitProcessor(str(f), account_id)
+            processor.parse()
+            xml_content = processor.generate_xml()
+            timestamp_ms = int(processor.start_time)
+                        
+            record_id, fittime = generate_params(timestamp_ms)
+            zip_data = compress_xml(xml_content, record_id)
+        except Exception as e:
+            logger.error(f'Error processing {f.name}: {e}')
             continue
 
-        history = load_history()
-        new_files = [f for f in settings.DATA_DIR.glob("*.fit") if f.name not in history]
-        logger.info(f"Found {len(new_files)} new records.")
+        logger.info(f"Uploading {f.name} (ID: {record_id})...")
+        # upload_record is synchronous (requests). That's fine for now, 
+        # or we could make it async later.
+        if not upload_record(session.token, zip_data, record_id, fittime):
+            logger.error(f"Failed to upload {f.name}")
+            continue
 
-        session = get_session()
-        if not session:
-            # Try auto-login if credentials are provided
-            if settings.BB_USERNAME and settings.BB_PASSWORD:
-                logger.info("No active session found. Attempting auto-login...")
-                # authenticate returns a tuple: (cookies, account_id, ton)
-                cookies, account_id, ton = authenticate(None, settings.BB_USERNAME, settings.BB_PASSWORD)
-                save_session(ton, settings.BB_USERNAME, account_id, cookies)
-                # Reload session to get the SessionData object
-                session = get_session()
-                logger.info("Auto-login successful.")
-            else:
-                msg = "No session found. Please login first."
-                logger.warning(msg)
-                return
-                
-        account_id = int(session.accountId)
-        for f in new_files:
-            logger.info(f"Processing {f.name}...")
-            try:
-                processor = FitProcessor(str(f), account_id)
-                processor.parse()
-                xml_content = processor.generate_xml()
-                timestamp_ms = int(processor.start_time)
-                            
-                record_id, fittime = generate_params(timestamp_ms)
-                zip_data = compress_xml(xml_content, record_id)
-            except Exception as e:
-                logger.error(f'Error processing {f.name}: {e}')
-                continue
+        logger.info(f"Upload successful: {f.name}")
+        history.add(f.name)
+        save_history(history)
 
-            logger.info(f"Uploading {f.name} (ID: {record_id})...")
-            # upload_record is synchronous (requests). That's fine for now, 
-            # or we could make it async later.
-            if not upload_record(session.ton, zip_data, record_id, fittime):
-                logger.error(f"Failed to upload {f.name}")
-                continue
+    logger.info("All records processed.")
+    return True
 
-            logger.info(f"Upload successful: {f.name}")
-            history.add(f.name)
-            save_history(history)
+async def main():
+    logger.info("Starting Blackbird Sports Uploader...")
+    session = verify_session()
+    if not session:
+        logger.error("Failed to verify session. Exiting...")
+        return
 
-        logger.info("All records processed.")
-        if once:
-            logger.info("Sync completed.")
-            typer.echo("Sync completed.")
-            break
+    while True:
+        result = await do_sync(session)
+        if result:
+            logger.info(f"Sync cycle completed successfully. Sleeping for {settings.SYNC_INTERVAL} seconds...")
+            await asyncio.sleep(settings.SYNC_INTERVAL)
+        else:
+            await asyncio.sleep(5)
 
-        logger.info(f"Sync cycle completed successfully. Sleeping for {settings.SYNC_INTERVAL} seconds...")
-        await asyncio.sleep(settings.SYNC_INTERVAL)
+def run():
+    asyncio.run(main())
 
 if __name__ == "__main__":
-    app()
+    run()
