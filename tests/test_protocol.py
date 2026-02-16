@@ -1,5 +1,5 @@
+import pathlib
 import pytest
-import binascii
 import blackbird_sports_uploader.bb16 as bb16
 
 def test_message_framing_escape():
@@ -22,7 +22,6 @@ def test_message_framing_escape():
     # If b=0x7E: 0x7E - 0x7D + 1 = 2. -> 0x02.
     # If b=0x7F: 0x7F - 0x7D + 1 = 3. -> 0x03.
     
-    expected = b"\x7D\x01\x7D\x02\x7D\x03"
     # Actually my calculation might be wrong, let's trust the code logic in test or derivation.
     # 0x7D (125). 0x7E (126). 0x7F (127).
     # 0x7D -> 0x7D 0x01?
@@ -71,8 +70,6 @@ def test_checksum_verification():
     # Should raise assertion error due to CRC mismatch
     with pytest.raises(AssertionError, match="crc mismatch"):
         bb16.Message.from_bytes(corrupted_data)
-
-import pathlib
 
 def test_parsing_captured_packets():
     # Load captured packets from file relative to this test file

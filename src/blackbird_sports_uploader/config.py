@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     
     # Sync Configuration
     SYNC_INTERVAL: int = 300  # Seconds to wait between syncs in loop mode (default 5 mins)
+    SYNC_ONLY_N_DAYS: int = 365
 
     # API Configuration
     BASE_URL: str = "https://client.blackbirdsport.com"

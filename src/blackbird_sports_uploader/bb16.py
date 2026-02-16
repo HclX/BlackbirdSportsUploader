@@ -4,7 +4,7 @@ import binascii
 import os
 from typing import List, Type, ClassVar, Tuple, Dict, Any, TypeVar
 from enum import Enum
-
+from datetime import datetime, timedelta
 from bleak import BleakClient
 from bleak.exc import BleakDeviceNotFoundError
 from pure_protobuf.annotations import Field, ZigZagInt
@@ -442,6 +442,7 @@ class BB16:
         self.post_stream = await PacketStream.create(self.client, UUID_COMMON_POST)
 
     async def disconnect(self):
+        logger.info(f"Disconnecting from {self.address}...")
         await self.get_stream.close()
         await self.push_stream.close()
         await self.post_stream.close()
@@ -487,12 +488,23 @@ class BB16:
         for filename in filenames:
             await self.download_file(filename, save_dir=save_dir)
 
-    async def download_records(self, save_dir: str) -> List[str]:
+    async def download_records(self, save_dir: str, last_n_days: int = 365) -> List[str]:
         data = await self.download_file("filelist.txt", save_dir=save_dir)
         filenames = []
+        since = datetime.now() - timedelta(days=last_n_days)
         for line in data.decode().strip().split("\n"):
             name, size_str = line.strip().split(" ")
             size = int(size_str)
+
+            try:
+                file_time = datetime.strptime(name, "%Y%m%d%H%M%S.fit")
+            except ValueError:
+                logger.warning(f"File {name} has unexpected format, skipping...")
+                continue
+
+            if file_time < since:
+                logger.info(f"File {name} is older than {last_n_days} days, skipping...")
+                continue
 
             local_name = os.path.join(save_dir, name)
             if os.path.exists(local_name) and os.path.getsize(local_name) == size:
@@ -504,7 +516,7 @@ class BB16:
 
         return filenames
 
-    async def sync(self, data_dir: str = "data") -> List[str]:
+    async def sync(self, data_dir: str = "data", last_n_days: int = 365) -> List[str]:
         await self.get_stream.write(GetDeviceInfoRequest())
         devInfo: GetDeviceInfoResponse = await self.get_stream.read()
         logger.info(f"Device info: {devInfo}")
@@ -513,7 +525,7 @@ class BB16:
         fileStatus: GetFileStatusResponse = await self.get_stream.read()
         logger.debug(f"File status: {fileStatus}")
 
-        updated_records = await self.download_records(data_dir)
+        updated_records = await self.download_records(data_dir, last_n_days)
         await self.download_files(
             data_dir,
             "Setting.json",
@@ -534,15 +546,15 @@ async def download() -> bool:
     data_dir = str(settings.DATA_DIR)
     os.makedirs(data_dir, exist_ok=True)
 
-    logger.info(f"Connecting to device {address}...")
+    logger.debug(f"Connecting to device {address}...")
 
     try:
         async with BB16(address) as bb16:
-            updated_records = await bb16.sync(data_dir)
+            updated_records = await bb16.sync(data_dir, settings.SYNC_ONLY_N_DAYS)
             logger.info(f"Updated records: {updated_records}")
         return True
     except BleakDeviceNotFoundError:
-        logger.error(f"Device {address} not found...")
+        logger.debug(f"Device {address} not found...")
         return False
     except Exception as e:
         logger.error(f"Error during BLE connection: {e}")

@@ -1,5 +1,4 @@
 import typer
-import time
 import asyncio
 import json
 from pathlib import Path
@@ -60,7 +59,7 @@ def save_history(history: Set[str]) -> None:
     """Save upload history to file."""
     try:
         with open(settings.UPLOAD_HISTORY_FILE, "w") as f:
-            json.dump(list(history), f)
+            json.dump(sorted(history), f, indent=4)
     except IOError as e:
         logger.error(f"Failed to save history: {e}")
 
@@ -224,8 +223,8 @@ async def async_sync_loop(once: bool):
             if once:
                  break
             # If download fails, wait a bit before retrying
-            logger.info(f"Waiting {settings.SYNC_INTERVAL}s before next cycle...")
-            await asyncio.sleep(settings.SYNC_INTERVAL)
+            logger.info("Waiting 3s before next cycle...")
+            await asyncio.sleep(3)
             continue
 
         history = load_history()
